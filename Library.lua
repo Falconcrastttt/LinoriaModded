@@ -163,66 +163,60 @@ function Library:CreateLabel(Properties, IsHud)
 end;
 
 -- Ghost wireframe drag (Win98/XP style) with smooth-drag fallback.
--- Drawing.new('Square') is wrapped in pcall so executors that don't
--- support it still get working dragging.
 function Library:MakeDraggable(GuiObj, Cutoff)
     GuiObj.Active = true;
 
-    -- Try to create a Drawing ghost; fall back gracefully if unsupported
     local Ghost, ghostOk = nil, false;
     pcall(function()
-        Ghost        = Drawing.new('Square');
-        Ghost.Filled = false;
-        Ghost.Color  = Color3.new(1, 1, 1);
+        Ghost           = Drawing.new('Square');
+        Ghost.Filled    = false;
+        Ghost.Color     = Color3.new(1, 1, 1);
         Ghost.Thickness = 2;
-        Ghost.Visible = false;
-        ghostOk = true;
+        Ghost.Visible   = false;
+        ghostOk         = true;
     end);
 
     GuiObj.InputBegan:Connect(function(Input)
         if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end;
 
-        local mStart  = InputService:GetMouseLocation();
         local absPos  = GuiObj.AbsolutePosition;
         local absSize = GuiObj.AbsoluteSize;
 
-        if (mStart.Y - absPos.Y) > (Cutoff or 40) then return end;
+        -- offsets use Mouse.X/Y (same coord space as AbsolutePosition)
+        local offX = Mouse.X - absPos.X;
+        local offY = Mouse.Y - absPos.Y;
 
-        local offX    = mStart.X - absPos.X;
-        local offY    = mStart.Y - absPos.Y;
+        if offY > (Cutoff or 40) then return end;
+
         local ancAdjX = absSize.X * GuiObj.AnchorPoint.X;
         local ancAdjY = absSize.Y * GuiObj.AnchorPoint.Y;
         local finalX  = absPos.X;
         local finalY  = absPos.Y;
 
         if ghostOk then
-            -- Ghost mode: show outline, window snaps on release
             Ghost.Size     = Vector2.new(absSize.X, absSize.Y);
             Ghost.Position = Vector2.new(absPos.X, absPos.Y);
             Ghost.Visible  = true;
 
             while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                local m = InputService:GetMouseLocation();
-                finalX  = m.X - offX;
-                finalY  = m.Y - offY;
+                finalX = Mouse.X - offX;
+                finalY = Mouse.Y - offY;
                 Ghost.Position = Vector2.new(finalX, finalY);
                 RenderStepped:Wait();
             end;
 
             Ghost.Visible = false;
+            GuiObj.Position = UDim2.fromOffset(finalX + ancAdjX, finalY + ancAdjY);
         else
-            -- Fallback: smooth live drag (original behaviour)
+            -- Fallback: original smooth live drag
             while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                local m = InputService:GetMouseLocation();
-                finalX  = m.X - offX + ancAdjX;
-                finalY  = m.Y - offY + ancAdjY;
-                GuiObj.Position = UDim2.fromOffset(finalX, finalY);
+                GuiObj.Position = UDim2.fromOffset(
+                    Mouse.X - offX + ancAdjX,
+                    Mouse.Y - offY + ancAdjY
+                );
                 RenderStepped:Wait();
             end;
-            return; -- position already set live, no snap needed
         end;
-
-        GuiObj.Position = UDim2.fromOffset(finalX + ancAdjX, finalY + ancAdjY);
     end);
 end;
 
