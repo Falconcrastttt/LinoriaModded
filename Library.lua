@@ -1502,10 +1502,33 @@ do
                 BorderColor3 = 'OutlineColor';
             });
 
-            Library:OnHighlight(Outer, Outer,
-                { BorderColor3 = 'AccentColor' },
-                { BorderColor3 = 'Black' }
-            );
+            -- Smooth hover tween
+            local hoverTween = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+            Outer.MouseEnter:Connect(function()
+                if not Library:MouseIsOverOpenedFrame() then
+                    TweenService:Create(Outer, hoverTween, { BorderColor3 = Library.AccentColor }):Play();
+                end
+            end);
+            Outer.MouseLeave:Connect(function()
+                TweenService:Create(Outer, hoverTween, { BorderColor3 = Color3.new(0,0,0) }):Play();
+            end);
+
+            -- Press flash tween
+            local pressTween = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+            Outer.InputBegan:Connect(function(Input)
+                if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    TweenService:Create(Inner, pressTween, {
+                        BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+                    }):Play();
+                end
+            end);
+            Outer.InputEnded:Connect(function(Input)
+                if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    TweenService:Create(Inner, pressTween, {
+                        BackgroundColor3 = Library.MainColor
+                    }):Play();
+                end
+            end);
 
             return Outer, Inner, Label
         end
@@ -1709,10 +1732,16 @@ do
             BorderColor3 = 'OutlineColor';
         });
 
-        Library:OnHighlight(TextBoxOuter, TextBoxOuter,
-            { BorderColor3 = 'AccentColor' },
-            { BorderColor3 = 'Black' }
-        );
+        -- Smooth hover tween for input
+        local inputHoverTween = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+        TextBoxOuter.MouseEnter:Connect(function()
+            if not Library:MouseIsOverOpenedFrame() then
+                TweenService:Create(TextBoxOuter, inputHoverTween, { BorderColor3 = Library.AccentColor }):Play();
+            end
+        end);
+        TextBoxOuter.MouseLeave:Connect(function()
+            TweenService:Create(TextBoxOuter, inputHoverTween, { BorderColor3 = Color3.new(0,0,0) }):Play();
+        end);
 
         if type(Info.Tooltip) == 'string' then
             Library:AddToolTip(Info.Tooltip, TextBoxOuter)
@@ -1913,10 +1942,16 @@ do
             Parent = ToggleOuter;
         });
 
-        Library:OnHighlight(ToggleRegion, ToggleOuter,
-            { BorderColor3 = 'AccentColor' },
-            { BorderColor3 = 'Black' }
-        );
+        -- Smooth hover tween on toggle
+        local toggleHoverTween = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+        ToggleRegion.MouseEnter:Connect(function()
+            if not Library:MouseIsOverOpenedFrame() then
+                TweenService:Create(ToggleOuter, toggleHoverTween, { BorderColor3 = Library.AccentColor }):Play();
+            end
+        end);
+        ToggleRegion.MouseLeave:Connect(function()
+            TweenService:Create(ToggleOuter, toggleHoverTween, { BorderColor3 = Color3.new(0,0,0) }):Play();
+        end);
 
         function Toggle:UpdateColors()
             Toggle:Display();
@@ -1926,12 +1961,19 @@ do
             Library:AddToolTip(Info.Tooltip, ToggleRegion)
         end
 
+        local toggleTween = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+
         function Toggle:Display()
-            ToggleInner.BackgroundColor3 = Toggle.Value and Library.AccentColor or Library.MainColor;
-            ToggleInner.BorderColor3 = Toggle.Value and Library.AccentColorDark or Library.OutlineColor;
+            local targetBg    = Toggle.Value and Library.AccentColor    or Library.MainColor;
+            local targetBorder = Toggle.Value and Library.AccentColorDark or Library.OutlineColor;
+
+            TweenService:Create(ToggleInner, toggleTween, {
+                BackgroundColor3 = targetBg;
+                BorderColor3     = targetBorder;
+            }):Play();
 
             Library.RegistryMap[ToggleInner].Properties.BackgroundColor3 = Toggle.Value and 'AccentColor' or 'MainColor';
-            Library.RegistryMap[ToggleInner].Properties.BorderColor3 = Toggle.Value and 'AccentColorDark' or 'OutlineColor';
+            Library.RegistryMap[ToggleInner].Properties.BorderColor3     = Toggle.Value and 'AccentColorDark' or 'OutlineColor';
         end;
 
         function Toggle:OnChanged(Func)
@@ -2079,10 +2121,16 @@ do
             Parent = SliderInner;
         });
 
-        Library:OnHighlight(SliderOuter, SliderOuter,
-            { BorderColor3 = 'AccentColor' },
-            { BorderColor3 = 'Black' }
-        );
+        -- Smooth hover tween on slider
+        local sliderHoverTween = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+        SliderOuter.MouseEnter:Connect(function()
+            if not Library:MouseIsOverOpenedFrame() then
+                TweenService:Create(SliderOuter, sliderHoverTween, { BorderColor3 = Library.AccentColor }):Play();
+            end
+        end);
+        SliderOuter.MouseLeave:Connect(function()
+            TweenService:Create(SliderOuter, sliderHoverTween, { BorderColor3 = Color3.new(0,0,0) }):Play();
+        end);
 
         if type(Info.Tooltip) == 'string' then
             Library:AddToolTip(Info.Tooltip, SliderOuter)
@@ -2092,6 +2140,8 @@ do
             Fill.BackgroundColor3 = Library.AccentColor;
             Fill.BorderColor3 = Library.AccentColorDark;
         end;
+
+        local sliderFillTween = TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
 
         function Slider:Display()
             local Suffix = Info.Suffix or '';
@@ -2105,7 +2155,7 @@ do
             end
 
             local X = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize));
-            Fill.Size = UDim2.new(0, X, 1, 0);
+            TweenService:Create(Fill, sliderFillTween, { Size = UDim2.new(0, X, 1, 0) }):Play();
 
             HideBorderRight.Visible = not (X == Slider.MaxSize or X == 0);
         end;
@@ -2287,10 +2337,16 @@ do
             Parent = DropdownInner;
         });
 
-        Library:OnHighlight(DropdownOuter, DropdownOuter,
-            { BorderColor3 = 'AccentColor' },
-            { BorderColor3 = 'Black' }
-        );
+        -- Smooth hover tween for dropdown
+        local dropdownHoverTween = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+        DropdownOuter.MouseEnter:Connect(function()
+            if not Library:MouseIsOverOpenedFrame() then
+                TweenService:Create(DropdownOuter, dropdownHoverTween, { BorderColor3 = Library.AccentColor }):Play();
+            end
+        end);
+        DropdownOuter.MouseLeave:Connect(function()
+            TweenService:Create(DropdownOuter, dropdownHoverTween, { BorderColor3 = Color3.new(0,0,0) }):Play();
+        end);
 
         if type(Info.Tooltip) == 'string' then
             Library:AddToolTip(Info.Tooltip, DropdownOuter)
@@ -2436,10 +2492,16 @@ do
                     Parent = Button;
                 });
 
-                Library:OnHighlight(Button, Button,
-                    { BorderColor3 = 'AccentColor', ZIndex = 24 },
-                    { BorderColor3 = 'OutlineColor', ZIndex = 23 }
-                );
+                -- Smooth hover tween for dropdown list item
+                local itemHoverTween = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
+                Button.MouseEnter:Connect(function()
+                    Button.ZIndex = 24;
+                    TweenService:Create(Button, itemHoverTween, { BorderColor3 = Library.AccentColor }):Play();
+                end);
+                Button.MouseLeave:Connect(function()
+                    Button.ZIndex = 23;
+                    TweenService:Create(Button, itemHoverTween, { BorderColor3 = Library.OutlineColor }):Play();
+                end);
 
                 local Selected;
 
