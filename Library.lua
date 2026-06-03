@@ -46,7 +46,7 @@ local Library = {
     RiskColor = Color3.fromRGB(255, 50, 50),
 
     Black = Color3.new(0, 0, 0);
-    Font = Enum.Font.Code,
+    Font = Enum.Font.Gotham,
 
     OpenedFrames = {};
     DependencyBoxes = {};
@@ -2025,7 +2025,6 @@ do
             Min = Info.Min;
             Max = Info.Max;
             Rounding = Info.Rounding;
-            MaxSize = 232;
             Type = 'Slider';
             Callback = Info.Callback or function(Value) end;
         };
@@ -2140,10 +2139,10 @@ do
                 DisplayLabel.Text = string.format('%s/%s', Slider.Value .. Suffix, Slider.Max .. Suffix);
             end
 
-            local X = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize));
-            TweenService:Create(Fill, sliderFillTween, { Size = UDim2.new(0, X, 1, 0) }):Play();
+            local Percent = Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, 1);
+            TweenService:Create(Fill, sliderFillTween, { Size = UDim2.new(Percent, 0, 1, 0) }):Play();
 
-            HideBorderRight.Visible = not (X == Slider.MaxSize or X == 0);
+            HideBorderRight.Visible = not (Percent == 1 or Percent == 0);
         end;
 
         function Slider:OnChanged(Func)
@@ -2161,7 +2160,7 @@ do
         end;
 
         function Slider:GetValueFromXOffset(X)
-            return Round(Library:MapValue(X, 0, Slider.MaxSize, Slider.Min, Slider.Max));
+            return Round(Library:MapValue(X, 0, SliderInner.AbsoluteSize.X, Slider.Min, Slider.Max));
         end;
 
         function Slider:SetValue(Str)
@@ -2182,13 +2181,10 @@ do
 
         SliderInner.InputBegan:Connect(function(Input)
             if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
-                local mPos = Mouse.X;
-                local gPos = Fill.Size.X.Offset;
-                local Diff = mPos - (Fill.AbsolutePosition.X + gPos);
-
                 while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
                     local nMPos = Mouse.X;
-                    local nX = math.clamp(gPos + (nMPos - mPos) + Diff, 0, Slider.MaxSize);
+                    local sliderWidth = SliderInner.AbsoluteSize.X;
+                    local nX = math.clamp(nMPos - SliderInner.AbsolutePosition.X, 0, sliderWidth);
 
                     local nValue = Slider:GetValueFromXOffset(nX);
                     local OldValue = Slider.Value;
