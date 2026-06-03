@@ -174,7 +174,7 @@ end;
 function Library:MakeDraggable(Instance, Cutoff)
     Instance.Active = true;
 
-    -- Try to create a Drawing ghost; Ghost stays nil if unsupported
+    -- Ghost stays nil if Drawing is unavailable / unsupported
     local Ghost = nil;
     pcall(function()
         local g     = Drawing.new('Square');
@@ -182,11 +182,12 @@ function Library:MakeDraggable(Instance, Cutoff)
         g.Color     = Color3.new(1, 1, 1);
         g.Thickness = 2;
         g.Visible   = false;
-        Ghost = g; -- only assigned if every property set above succeeded
+        Ghost = g;
     end);
 
     Instance.InputBegan:Connect(function(Input)
         if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+            -- ObjPos in game-viewport coords (same space as Mouse.X/Y & AbsolutePosition)
             local ObjPos = Vector2.new(
                 Mouse.X - Instance.AbsolutePosition.X,
                 Mouse.Y - Instance.AbsolutePosition.Y
@@ -197,17 +198,25 @@ function Library:MakeDraggable(Instance, Cutoff)
             end;
 
             if Ghost then
-                -- Ghost mode: show outline, snap window on release
+                -- Ghost positions use GetMouseLocation() (full-screen coords = Drawing coords).
+                -- GetMouseLocation() - ObjPos correctly maps to full-screen window top-left
+                -- because the game-window offset cancels in the subtraction.
+                local function ghostPos()
+                    local m = InputService:GetMouseLocation();
+                    return Vector2.new(m.X - ObjPos.X, m.Y - ObjPos.Y);
+                end;
+
                 Ghost.Size     = Vector2.new(Instance.AbsoluteSize.X, Instance.AbsoluteSize.Y);
-                Ghost.Position = Vector2.new(Mouse.X - ObjPos.X, Mouse.Y - ObjPos.Y);
+                Ghost.Position = ghostPos();
                 Ghost.Visible  = true;
 
                 while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                    Ghost.Position = Vector2.new(Mouse.X - ObjPos.X, Mouse.Y - ObjPos.Y);
+                    Ghost.Position = ghostPos();
                     RenderStepped:Wait();
                 end;
 
                 Ghost.Visible = false;
+                -- Snap uses Mouse.X/Y (game coords) which matches UDim2 offset coords
                 Instance.Position = UDim2.new(
                     0, Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
                     0, Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
