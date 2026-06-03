@@ -12,7 +12,15 @@ local Mouse = LocalPlayer:GetMouse();
 
 local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
 
-local ScreenGui = Instance.new('ScreenGui');
+-- Clean up any previous instance so re-executing doesn't stack windows
+for _, v in next, CoreGui:GetChildren() do
+    if v:IsA('ScreenGui') and v.Name == 'LinoriaLib' then
+        v:Destroy();
+    end;
+end;
+
+local ScreenGui = NewInstance('ScreenGui');
+ScreenGui.Name = 'LinoriaLib';
 ProtectGui(ScreenGui);
 
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
@@ -163,61 +171,59 @@ function Library:CreateLabel(Properties, IsHud)
 end;
 
 -- Ghost wireframe drag (Win98/XP style) with smooth-drag fallback.
-function Library:MakeDraggable(GuiObj, Cutoff)
-    GuiObj.Active = true;
+function Library:MakeDraggable(Instance, Cutoff)
+    Instance.Active = true;
 
-    local Ghost, ghostOk = nil, false;
+    -- Try to create a Drawing ghost; Ghost stays nil if unsupported
+    local Ghost = nil;
     pcall(function()
-        Ghost           = Drawing.new('Square');
-        Ghost.Filled    = false;
-        Ghost.Color     = Color3.new(1, 1, 1);
-        Ghost.Thickness = 2;
-        Ghost.Visible   = false;
-        ghostOk         = true;
+        local g     = Drawing.new('Square');
+        g.Filled    = false;
+        g.Color     = Color3.new(1, 1, 1);
+        g.Thickness = 2;
+        g.Visible   = false;
+        Ghost = g; -- only assigned if every property set above succeeded
     end);
 
-    GuiObj.InputBegan:Connect(function(Input)
-        if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end;
+    Instance.InputBegan:Connect(function(Input)
+        if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local ObjPos = Vector2.new(
+                Mouse.X - Instance.AbsolutePosition.X,
+                Mouse.Y - Instance.AbsolutePosition.Y
+            );
 
-        local absPos  = GuiObj.AbsolutePosition;
-        local absSize = GuiObj.AbsoluteSize;
-
-        -- offsets use Mouse.X/Y (same coord space as AbsolutePosition)
-        local offX = Mouse.X - absPos.X;
-        local offY = Mouse.Y - absPos.Y;
-
-        if offY > (Cutoff or 40) then return end;
-
-        local ancAdjX = absSize.X * GuiObj.AnchorPoint.X;
-        local ancAdjY = absSize.Y * GuiObj.AnchorPoint.Y;
-        local finalX  = absPos.X;
-        local finalY  = absPos.Y;
-
-        if ghostOk then
-            Ghost.Size     = Vector2.new(absSize.X, absSize.Y);
-            Ghost.Position = Vector2.new(absPos.X, absPos.Y);
-            Ghost.Visible  = true;
-
-            while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                finalX = Mouse.X - offX;
-                finalY = Mouse.Y - offY;
-                Ghost.Position = Vector2.new(finalX, finalY);
-                RenderStepped:Wait();
+            if ObjPos.Y > (Cutoff or 40) then
+                return;
             end;
 
-            Ghost.Visible = false;
-            GuiObj.Position = UDim2.fromOffset(finalX + ancAdjX, finalY + ancAdjY);
-        else
-            -- Fallback: original smooth live drag
-            while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                GuiObj.Position = UDim2.fromOffset(
-                    Mouse.X - offX + ancAdjX,
-                    Mouse.Y - offY + ancAdjY
+            if Ghost then
+                -- Ghost mode: show outline, snap window on release
+                Ghost.Size     = Vector2.new(Instance.AbsoluteSize.X, Instance.AbsoluteSize.Y);
+                Ghost.Position = Vector2.new(Mouse.X - ObjPos.X, Mouse.Y - ObjPos.Y);
+                Ghost.Visible  = true;
+
+                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                    Ghost.Position = Vector2.new(Mouse.X - ObjPos.X, Mouse.Y - ObjPos.Y);
+                    RenderStepped:Wait();
+                end;
+
+                Ghost.Visible = false;
+                Instance.Position = UDim2.new(
+                    0, Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
+                    0, Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
                 );
-                RenderStepped:Wait();
+            else
+                -- Fallback: original smooth live drag
+                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                    Instance.Position = UDim2.new(
+                        0, Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
+                        0, Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
+                    );
+                    RenderStepped:Wait();
+                end;
             end;
         end;
-    end);
+    end)
 end;
 
 function Library:AddToolTip(InfoStr, HoverInstance)
