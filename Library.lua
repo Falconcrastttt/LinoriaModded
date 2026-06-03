@@ -162,57 +162,66 @@ function Library:CreateLabel(Properties, IsHud)
     return Library:Create(_Instance, Properties);
 end;
 
--- Ghost wireframe drag (Win98/XP style)
--- Tracks via pure mouse delta to avoid any coord-space mismatch.
--- Drawing ghost is sized/positioned using GetMouseLocation() which
--- lives in the same raw screen space as Drawing objects.
+-- Ghost wireframe drag (Win98/XP style) with smooth-drag fallback.
+-- Drawing.new('Square') is wrapped in pcall so executors that don't
+-- support it still get working dragging.
 function Library:MakeDraggable(GuiObj, Cutoff)
     GuiObj.Active = true;
 
-    local Ghost     = Drawing.new('Square');
-    Ghost.Visible   = false;
-    Ghost.Filled    = false;
-    Ghost.Color     = Color3.new(1, 1, 1);
-    Ghost.Thickness = 2;
-    -- NOTE: do NOT set Transparency here – different executors invert the convention
+    -- Try to create a Drawing ghost; fall back gracefully if unsupported
+    local Ghost, ghostOk = nil, false;
+    pcall(function()
+        Ghost        = Drawing.new('Square');
+        Ghost.Filled = false;
+        Ghost.Color  = Color3.new(1, 1, 1);
+        Ghost.Thickness = 2;
+        Ghost.Visible = false;
+        ghostOk = true;
+    end);
 
     GuiObj.InputBegan:Connect(function(Input)
         if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end;
 
-        -- Use GetMouseLocation for coords that match Drawing's coord space
-        local mStart   = InputService:GetMouseLocation();
-        local absPos   = GuiObj.AbsolutePosition;
-        local absSize  = GuiObj.AbsoluteSize;
+        local mStart  = InputService:GetMouseLocation();
+        local absPos  = GuiObj.AbsolutePosition;
+        local absSize = GuiObj.AbsoluteSize;
 
-        -- Y offset of click within the frame (for cutoff check)
-        local clickOffY = mStart.Y - absPos.Y;
-        if clickOffY > (Cutoff or 40) then return end;
+        if (mStart.Y - absPos.Y) > (Cutoff or 40) then return end;
 
-        -- Pixel offset of mouse from window's top-left corner
-        local offX = mStart.X - absPos.X;
-        local offY = mStart.Y - absPos.Y;
-
-        -- Anchor adjustment needed to convert top-left → UDim2 Position
+        local offX    = mStart.X - absPos.X;
+        local offY    = mStart.Y - absPos.Y;
         local ancAdjX = absSize.X * GuiObj.AnchorPoint.X;
         local ancAdjY = absSize.Y * GuiObj.AnchorPoint.Y;
+        local finalX  = absPos.X;
+        local finalY  = absPos.Y;
 
-        -- Start ghost exactly on top of the window
-        Ghost.Size     = Vector2.new(absSize.X, absSize.Y);
-        Ghost.Position = Vector2.new(absPos.X, absPos.Y);
-        Ghost.Visible  = true;
+        if ghostOk then
+            -- Ghost mode: show outline, window snaps on release
+            Ghost.Size     = Vector2.new(absSize.X, absSize.Y);
+            Ghost.Position = Vector2.new(absPos.X, absPos.Y);
+            Ghost.Visible  = true;
 
-        local finalX = absPos.X;
-        local finalY = absPos.Y;
+            while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                local m = InputService:GetMouseLocation();
+                finalX  = m.X - offX;
+                finalY  = m.Y - offY;
+                Ghost.Position = Vector2.new(finalX, finalY);
+                RenderStepped:Wait();
+            end;
 
-        while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-            local m = InputService:GetMouseLocation();
-            finalX = m.X - offX;
-            finalY = m.Y - offY;
-            Ghost.Position = Vector2.new(finalX, finalY);
-            RenderStepped:Wait();
+            Ghost.Visible = false;
+        else
+            -- Fallback: smooth live drag (original behaviour)
+            while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                local m = InputService:GetMouseLocation();
+                finalX  = m.X - offX + ancAdjX;
+                finalY  = m.Y - offY + ancAdjY;
+                GuiObj.Position = UDim2.fromOffset(finalX, finalY);
+                RenderStepped:Wait();
+            end;
+            return; -- position already set live, no snap needed
         end;
 
-        Ghost.Visible = false;
         GuiObj.Position = UDim2.fromOffset(finalX + ancAdjX, finalY + ancAdjY);
     end);
 end;
@@ -2976,7 +2985,7 @@ function Library:CreateWindow(...)
     if type(Config.MenuFadeTime) ~= 'number' then Config.MenuFadeTime = 0.2 end
 
     if typeof(Config.Position) ~= 'UDim2' then Config.Position = UDim2.fromOffset(175, 50) end
-    if typeof(Config.Size) ~= 'UDim2' then Config.Size = UDim2.fromOffset(700, 750) end
+    if typeof(Config.Size) ~= 'UDim2' then Config.Size = UDim2.fromOffset(620, 750) end
 
     if Config.Center then
         Config.AnchorPoint = Vector2.new(0.5, 0.5)
