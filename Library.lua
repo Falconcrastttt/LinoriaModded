@@ -163,55 +163,56 @@ function Library:CreateLabel(Properties, IsHud)
 end;
 
 -- Ghost wireframe drag (Win98/XP style)
--- Uses Drawing.new('Square') so coordinates are in raw screen-space,
--- matching Mouse.X/Y exactly. The window stays frozen while the ghost
--- outline follows the cursor; on release it snaps into place.
+-- Tracks via pure mouse delta to avoid any coord-space mismatch.
+-- Drawing ghost is sized/positioned using GetMouseLocation() which
+-- lives in the same raw screen space as Drawing objects.
 function Library:MakeDraggable(GuiObj, Cutoff)
     GuiObj.Active = true;
 
-    -- Drawing-based ghost outline (unfilled square = just the border)
-    local Ghost        = Drawing.new('Square');
-    Ghost.Visible      = false;
-    Ghost.Filled       = false;
-    Ghost.Color        = Color3.new(1, 1, 1);   -- white outline
-    Ghost.Thickness    = 1;
-    Ghost.Transparency = 1;                     -- fully opaque
+    local Ghost     = Drawing.new('Square');
+    Ghost.Visible   = false;
+    Ghost.Filled    = false;
+    Ghost.Color     = Color3.new(1, 1, 1);
+    Ghost.Thickness = 2;
+    -- NOTE: do NOT set Transparency here – different executors invert the convention
 
     GuiObj.InputBegan:Connect(function(Input)
         if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end;
 
-        -- Offset of click from the frame's top-left corner
-        local ObjOff = Vector2.new(
-            Mouse.X - GuiObj.AbsolutePosition.X,
-            Mouse.Y - GuiObj.AbsolutePosition.Y
-        );
+        -- Use GetMouseLocation for coords that match Drawing's coord space
+        local mStart   = InputService:GetMouseLocation();
+        local absPos   = GuiObj.AbsolutePosition;
+        local absSize  = GuiObj.AbsoluteSize;
 
-        if ObjOff.Y > (Cutoff or 40) then return end;
+        -- Y offset of click within the frame (for cutoff check)
+        local clickOffY = mStart.Y - absPos.Y;
+        if clickOffY > (Cutoff or 40) then return end;
 
-        -- Anchor-point adjustment needed when setting UDim2 offset position
-        local ancAdjX = GuiObj.AbsoluteSize.X * GuiObj.AnchorPoint.X;
-        local ancAdjY = GuiObj.AbsoluteSize.Y * GuiObj.AnchorPoint.Y;
+        -- Pixel offset of mouse from window's top-left corner
+        local offX = mStart.X - absPos.X;
+        local offY = mStart.Y - absPos.Y;
 
-        -- Initialise ghost at the current window position/size
-        Ghost.Size     = Vector2.new(GuiObj.AbsoluteSize.X, GuiObj.AbsoluteSize.Y);
-        Ghost.Position = Vector2.new(GuiObj.AbsolutePosition.X, GuiObj.AbsolutePosition.Y);
+        -- Anchor adjustment needed to convert top-left → UDim2 Position
+        local ancAdjX = absSize.X * GuiObj.AnchorPoint.X;
+        local ancAdjY = absSize.Y * GuiObj.AnchorPoint.Y;
+
+        -- Start ghost exactly on top of the window
+        Ghost.Size     = Vector2.new(absSize.X, absSize.Y);
+        Ghost.Position = Vector2.new(absPos.X, absPos.Y);
         Ghost.Visible  = true;
 
-        -- Track where the ghost ends up (top-left corner in screen coords)
-        local finalX = GuiObj.AbsolutePosition.X;
-        local finalY = GuiObj.AbsolutePosition.Y;
+        local finalX = absPos.X;
+        local finalY = absPos.Y;
 
         while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-            -- top-left of ghost in screen space
-            finalX = Mouse.X - ObjOff.X;
-            finalY = Mouse.Y - ObjOff.Y;
+            local m = InputService:GetMouseLocation();
+            finalX = m.X - offX;
+            finalY = m.Y - offY;
             Ghost.Position = Vector2.new(finalX, finalY);
             RenderStepped:Wait();
         end;
 
         Ghost.Visible = false;
-
-        -- Convert screen top-left → UDim2 offset position (adding anchor adjustment)
         GuiObj.Position = UDim2.fromOffset(finalX + ancAdjX, finalY + ancAdjY);
     end);
 end;
@@ -2975,7 +2976,7 @@ function Library:CreateWindow(...)
     if type(Config.MenuFadeTime) ~= 'number' then Config.MenuFadeTime = 0.2 end
 
     if typeof(Config.Position) ~= 'UDim2' then Config.Position = UDim2.fromOffset(175, 50) end
-    if typeof(Config.Size) ~= 'UDim2' then Config.Size = UDim2.fromOffset(550, 600) end
+    if typeof(Config.Size) ~= 'UDim2' then Config.Size = UDim2.fromOffset(700, 750) end
 
     if Config.Center then
         Config.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -3142,7 +3143,7 @@ function Library:CreateWindow(...)
             BackgroundTransparency = 1;
             BorderSizePixel = 0;
             Position = UDim2.new(0, 8 - 1, 0, 8 - 1);
-            Size = UDim2.new(0.5, -12 + 2, 0, 507 + 2);
+            Size = UDim2.new(0.5, -12 + 2, 0, 657 + 2);
             CanvasSize = UDim2.new(0, 0, 0, 0);
             BottomImage = '';
             TopImage = '';
@@ -3155,7 +3156,7 @@ function Library:CreateWindow(...)
             BackgroundTransparency = 1;
             BorderSizePixel = 0;
             Position = UDim2.new(0.5, 4 + 1, 0, 8 - 1);
-            Size = UDim2.new(0.5, -12 + 2, 0, 507 + 2);
+            Size = UDim2.new(0.5, -12 + 2, 0, 657 + 2);
             CanvasSize = UDim2.new(0, 0, 0, 0);
             BottomImage = '';
             TopImage = '';
