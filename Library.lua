@@ -170,24 +170,28 @@ function Library:CreateLabel(Properties, IsHud)
     return Library:Create(_Instance, Properties);
 end;
 
--- Ghost wireframe drag (Win98/XP style) with smooth-drag fallback.
+-- Ghost wireframe drag (Win98/XP style).
+-- Ghost is a plain Frame+UIStroke inside the same ScreenGui as the window,
+-- so Mouse.X/Y, AbsolutePosition, and Ghost.Position all share one coord space.
 function Library:MakeDraggable(Instance, Cutoff)
     Instance.Active = true;
 
-    -- Ghost stays nil if Drawing is unavailable / unsupported
-    local Ghost = nil;
-    pcall(function()
-        local g     = Drawing.new('Square');
-        g.Filled    = false;
-        g.Color     = Color3.new(1, 1, 1);
-        g.Thickness = 2;
-        g.Visible   = false;
-        Ghost = g;
-    end);
+    -- Build the ghost frame (transparent fill, white stroke border)
+    local GhostFrame = NewInstance('Frame');
+    GhostFrame.BackgroundTransparency = 1;
+    GhostFrame.BorderSizePixel        = 0;
+    GhostFrame.ZIndex                 = 9999;
+    GhostFrame.Visible                = false;
+    GhostFrame.Parent                 = ScreenGui;
+
+    local GhostStroke       = NewInstance('UIStroke');
+    GhostStroke.Color       = Color3.new(1, 1, 1);
+    GhostStroke.Thickness   = 2;
+    GhostStroke.LineJoinMode = Enum.LineJoinMode.Round;
+    GhostStroke.Parent      = GhostFrame;
 
     Instance.InputBegan:Connect(function(Input)
         if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-            -- ObjPos in game-viewport coords (same space as Mouse.X/Y & AbsolutePosition)
             local ObjPos = Vector2.new(
                 Mouse.X - Instance.AbsolutePosition.X,
                 Mouse.Y - Instance.AbsolutePosition.Y
@@ -197,40 +201,23 @@ function Library:MakeDraggable(Instance, Cutoff)
                 return;
             end;
 
-            if Ghost then
-                -- Ghost positions use GetMouseLocation() (full-screen coords = Drawing coords).
-                -- GetMouseLocation() - ObjPos correctly maps to full-screen window top-left
-                -- because the game-window offset cancels in the subtraction.
-                local function ghostPos()
-                    local m = InputService:GetMouseLocation();
-                    return Vector2.new(m.X - ObjPos.X, m.Y - ObjPos.Y);
-                end;
+            -- Snap the ghost exactly on top of the window
+            GhostFrame.Size     = UDim2.fromOffset(Instance.AbsoluteSize.X, Instance.AbsoluteSize.Y);
+            GhostFrame.Position = UDim2.fromOffset(Mouse.X - ObjPos.X, Mouse.Y - ObjPos.Y);
+            GhostFrame.Visible  = true;
 
-                Ghost.Size     = Vector2.new(Instance.AbsoluteSize.X, Instance.AbsoluteSize.Y);
-                Ghost.Position = ghostPos();
-                Ghost.Visible  = true;
-
-                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                    Ghost.Position = ghostPos();
-                    RenderStepped:Wait();
-                end;
-
-                Ghost.Visible = false;
-                -- Snap uses Mouse.X/Y (game coords) which matches UDim2 offset coords
-                Instance.Position = UDim2.new(
-                    0, Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
-                    0, Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
-                );
-            else
-                -- Fallback: original smooth live drag
-                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                    Instance.Position = UDim2.new(
-                        0, Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
-                        0, Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
-                    );
-                    RenderStepped:Wait();
-                end;
+            while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                GhostFrame.Position = UDim2.fromOffset(Mouse.X - ObjPos.X, Mouse.Y - ObjPos.Y);
+                RenderStepped:Wait();
             end;
+
+            GhostFrame.Visible = false;
+
+            -- Snap window to ghost's final position
+            Instance.Position = UDim2.new(
+                0, Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
+                0, Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
+            );
         end;
     end)
 end;
