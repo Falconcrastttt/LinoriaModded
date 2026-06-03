@@ -163,61 +163,57 @@ function Library:CreateLabel(Properties, IsHud)
 end;
 
 -- Ghost wireframe drag (Win98/XP style)
--- While dragging, only a border outline rectangle is shown.
--- The window snaps into its final position when the mouse is released.
+-- Uses Drawing.new('Square') so coordinates are in raw screen-space,
+-- matching Mouse.X/Y exactly. The window stays frozen while the ghost
+-- outline follows the cursor; on release it snaps into place.
 function Library:MakeDraggable(GuiObj, Cutoff)
     GuiObj.Active = true;
 
-    -- Build the ghost wireframe (4 thin white border strips) using the cached NewInstance
-    local Ghost = NewInstance('Frame');
-    Ghost.BackgroundTransparency = 1;
-    Ghost.BorderSizePixel = 0;
-    Ghost.ZIndex = 9999;
-    Ghost.Visible = false;
-    Ghost.Parent = ScreenGui;
-
-    local function MakeSide(props)
-        local f = NewInstance('Frame');
-        f.BackgroundColor3 = Color3.new(1, 1, 1);
-        f.BorderSizePixel = 0;
-        f.ZIndex = 9999;
-        for k, v in next, props do f[k] = v end;
-        f.Parent = Ghost;
-    end
-
-    MakeSide({ Position = UDim2.new(0,0,0,0);  Size = UDim2.new(1,0,0,1) });  -- top
-    MakeSide({ Position = UDim2.new(0,0,1,-1); Size = UDim2.new(1,0,0,1) });  -- bottom
-    MakeSide({ Position = UDim2.new(0,0,0,0);  Size = UDim2.new(0,1,1,0) });  -- left
-    MakeSide({ Position = UDim2.new(1,-1,0,0); Size = UDim2.new(0,1,1,0) });  -- right
+    -- Drawing-based ghost outline (unfilled square = just the border)
+    local Ghost        = Drawing.new('Square');
+    Ghost.Visible      = false;
+    Ghost.Filled       = false;
+    Ghost.Color        = Color3.new(1, 1, 1);   -- white outline
+    Ghost.Thickness    = 1;
+    Ghost.Transparency = 1;                     -- fully opaque
 
     GuiObj.InputBegan:Connect(function(Input)
-        if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local ObjPos = Vector2.new(
-                Mouse.X - GuiObj.AbsolutePosition.X,
-                Mouse.Y - GuiObj.AbsolutePosition.Y
-            );
+        if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end;
 
-            if ObjPos.Y > (Cutoff or 40) then
-                return;
-            end;
+        -- Offset of click from the frame's top-left corner
+        local ObjOff = Vector2.new(
+            Mouse.X - GuiObj.AbsolutePosition.X,
+            Mouse.Y - GuiObj.AbsolutePosition.Y
+        );
 
-            -- Materialise ghost at current position/size
-            Ghost.Size     = UDim2.fromOffset(GuiObj.AbsoluteSize.X, GuiObj.AbsoluteSize.Y);
-            Ghost.Position = UDim2.fromOffset(GuiObj.AbsolutePosition.X, GuiObj.AbsolutePosition.Y);
-            Ghost.Visible  = true;
+        if ObjOff.Y > (Cutoff or 40) then return end;
 
-            while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                local GX = Mouse.X - ObjPos.X + (GuiObj.Size.X.Offset * GuiObj.AnchorPoint.X);
-                local GY = Mouse.Y - ObjPos.Y + (GuiObj.Size.Y.Offset * GuiObj.AnchorPoint.Y);
-                Ghost.Position = UDim2.fromOffset(GX, GY);
-                RenderStepped:Wait();
-            end;
+        -- Anchor-point adjustment needed when setting UDim2 offset position
+        local ancAdjX = GuiObj.AbsoluteSize.X * GuiObj.AnchorPoint.X;
+        local ancAdjY = GuiObj.AbsoluteSize.Y * GuiObj.AnchorPoint.Y;
 
-            -- Snap window to ghost position and hide ghost
-            Ghost.Visible  = false;
-            GuiObj.Position = Ghost.Position;
+        -- Initialise ghost at the current window position/size
+        Ghost.Size     = Vector2.new(GuiObj.AbsoluteSize.X, GuiObj.AbsoluteSize.Y);
+        Ghost.Position = Vector2.new(GuiObj.AbsolutePosition.X, GuiObj.AbsolutePosition.Y);
+        Ghost.Visible  = true;
+
+        -- Track where the ghost ends up (top-left corner in screen coords)
+        local finalX = GuiObj.AbsolutePosition.X;
+        local finalY = GuiObj.AbsolutePosition.Y;
+
+        while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+            -- top-left of ghost in screen space
+            finalX = Mouse.X - ObjOff.X;
+            finalY = Mouse.Y - ObjOff.Y;
+            Ghost.Position = Vector2.new(finalX, finalY);
+            RenderStepped:Wait();
         end;
-    end)
+
+        Ghost.Visible = false;
+
+        -- Convert screen top-left → UDim2 offset position (adding anchor adjustment)
+        GuiObj.Position = UDim2.fromOffset(finalX + ancAdjX, finalY + ancAdjY);
+    end);
 end;
 
 function Library:AddToolTip(InfoStr, HoverInstance)
@@ -3552,45 +3548,8 @@ function Library:CreateWindow(...)
             -- A bit scuffed, but if we're going from not toggled -> toggled we want to show the frame immediately so that the fade is visible.
             Outer.Visible = true;
 
-            task.spawn(function()
-                -- TODO: add cursor fade?
-                local State = InputService.MouseIconEnabled;
-
-                local Cursor = Drawing.new('Triangle');
-                Cursor.Thickness = 1;
-                Cursor.Filled = true;
-                Cursor.Visible = true;
-
-                local CursorOutline = Drawing.new('Triangle');
-                CursorOutline.Thickness = 1;
-                CursorOutline.Filled = false;
-                CursorOutline.Color = Color3.new(0, 0, 0);
-                CursorOutline.Visible = true;
-
-                while Toggled and ScreenGui.Parent do
-                    InputService.MouseIconEnabled = false;
-
-                    local mPos = InputService:GetMouseLocation();
-
-                    Cursor.Color = Library.AccentColor;
-
-                    Cursor.PointA = Vector2.new(mPos.X, mPos.Y);
-                    Cursor.PointB = Vector2.new(mPos.X + 16, mPos.Y + 6);
-                    Cursor.PointC = Vector2.new(mPos.X + 6, mPos.Y + 16);
-
-                    CursorOutline.PointA = Cursor.PointA;
-                    CursorOutline.PointB = Cursor.PointB;
-                    CursorOutline.PointC = Cursor.PointC;
-
-                    RenderStepped:Wait();
-                end;
-
-                InputService.MouseIconEnabled = State;
-
-                Cursor:Remove();
-                CursorOutline:Remove();
-            end);
         end;
+
 
         for _, Desc in next, Outer:GetDescendants() do
             local Properties = {};
